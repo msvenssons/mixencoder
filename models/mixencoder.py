@@ -1,19 +1,26 @@
 import torch.nn as nn
 import torch
-from utils import mixer
+from utils.utils import mixer
 import yaml
 
-with open("config.yaml", "r") as f:
-    config = yaml.safe_load(f)
+#with open("config.yaml", "r") as f:
+    #config = yaml.safe_load(f)
 
 class MixEncoder(nn.Module):
     def __init__(self, input_size: int = 27, hidden_size: int = 10, emb_size: int = 10, 
                  enc_layers: int = 4, mix_layers: int = 2, restore_layers: int = 2, mode: str = "zmix", lamb: float = 0.5):
         super(MixEncoder, self).__init__()
 
-        # initialization
+        self.input_size = input_size
+        self.hidden_size = hidden_size
+        self.emb_size = emb_size
+        self.enc_layers = enc_layers
+        self.mix_layers = mix_layers
+        self.restore_layers = restore_layers
         self.mode = mode
         self.lamb = lamb
+
+        self._validate_config()
 
         print("Setting up Mix Encoder for pre-training...\n")
         print(f"Mode: {mode}\n")
@@ -59,7 +66,7 @@ class MixEncoder(nn.Module):
     
     def _validate_config(self):
         # Validate input_size
-        if self.input_size <= 0 or self.input_size.type != int:
+        if self.input_size <= 0 or type(self.input_size) != int:
             raise ValueError("input_size must be a positive integer.")
 
         # Validate enc_layers
