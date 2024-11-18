@@ -3,16 +3,23 @@ import torch
 from utils.utils import mixer
 from train.trainer import Trainer
 
-#with open("config.yaml", "r") as f:
-    #config = yaml.safe_load(f)
+
+
 
 class MixEncoder(nn.Module, Trainer):
-    def __init__(self, input_size: int = 27, hidden_size: int = 10, emb_size: int = 10, 
-                 enc_layers: int = 4, mix_layers: int = 2, restore_layers: int = 2, mode: str = "zmix", alpha: float = 5, beta: float = 2,
-                 u_thresh = 0.9, l_thresh = 0.5):
+    def __init__(self, input_size: int = 27, 
+                 hidden_size: int = 10, 
+                 emb_size: int = 10, 
+                 enc_layers: int = 4, 
+                 mix_layers: int = 2, 
+                 restore_layers: int = 2, 
+                 mode: str = "xmix", 
+                 alpha: float = 5, 
+                 beta: float = 2,
+                 u_thresh: float = 0.9, 
+                 l_thresh: float = 0.5):
+        
         super(MixEncoder, self).__init__()
-        #nn.Module.__init__(self)
-        #Trainer.__init__(self)
 
         self.input_size = input_size
         self.hidden_size = hidden_size
@@ -36,7 +43,7 @@ class MixEncoder(nn.Module, Trainer):
             nn.GELU(),
             *[layer for _ in range(enc_layers-2) for layer in (nn.Linear(hidden_size, hidden_size), nn.GELU())],
             nn.Linear(hidden_size, emb_size),
-            nn.Sigmoid()
+            nn.GELU()
         )
 
         self.mix_stack = nn.Sequential(
@@ -62,7 +69,7 @@ class MixEncoder(nn.Module, Trainer):
             rest_pred = self.restore_stack(z)
         elif self.mode == "zmix":
             z = self.encoder_stack(x)
-            mix = mixer(z, self.alpha, self.beta, self.u_thresh, self.l_thresh)
+            mix, lamb = mixer(z, self.alpha, self.beta, self.u_thresh, self.l_thresh)
             mix_pred = self.mix_stack(mix)
             rest_pred = self.restore_stack(mix)
         out = {

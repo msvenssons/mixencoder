@@ -5,6 +5,7 @@ import torch.optim as optim
 from torch.utils.data import DataLoader, TensorDataset 
 import tqdm
 from sklearn.metrics import roc_auc_score
+import matplotlib.pyplot as plt
 
 
 class Trainer:
@@ -14,10 +15,26 @@ class Trainer:
 
         self.train_metric = None
         self.val_metric = None
+        self.device = "cpu"
+        self.train_losses = []
+        self.val_losses = []
 
 
-    def fit(self, x_train, y_train, x_val, y_val, mode: str = 'cls', metric: str = "accuracy", epochs: int = 100, batch_size: int = 200, lr: float = 1e-3, device: str = "cpu"):
+    def fit(self, 
+            x_train, 
+            y_train, 
+            x_val, 
+            y_val, mode: str = 'cls', 
+            metric: str = "accuracy", 
+            epochs: int = 100, 
+            batch_size: int = 200, 
+            lr: float = 1e-3,
+            l_scale: float = 0.3,
+            plot: bool = True, 
+            device: str = "cpu"):
+        
         # TODO: add testing functionality
+        #       I don't need metrics here, this is just to pretrain the encoder
         
         """Training loop for mixencoder.
         Args:
@@ -53,9 +70,9 @@ class Trainer:
         # set device and criterion
 
         if device == "cuda" and torch.cuda.is_available():
-            device = "cuda"
+            self.device = "cuda"
         else:
-            device = "cpu"
+            self.device = "cpu"
             print("cuda not available; using cpu")
         if mode == "cls":
             criterion = nn.BCELoss()
@@ -66,99 +83,91 @@ class Trainer:
 
 
         # set training parameters
+        # TODO: modularize this so it can be reused in finetuner
 
-        self.to(device)
-        x_train, y_train = x_train.to(device), y_train.to(device)
-        x_val, y_val = x_val.to(device), y_val.to(device)
+        self.to(self.device)
+        x_train, y_train = x_train.to(self.device), y_train.to(self.device)
+        x_val, y_val = x_val.to(self.device), y_val.to(self.device)
         train_data = TensorDataset(x_train, y_train)
         val_data = TensorDataset(x_val, y_val)
-        criterion = nn.MSELoss()
+        rest_criterion = nn.MSELoss()
+        mix_criterion = nn.MSELoss()
         optimizer = optim.Adam(self.parameters(), lr=lr)
         train_loader = DataLoader(train_data, batch_size=batch_size, shuffle=True)
         val_loader = DataLoader(val_data, batch_size=batch_size, shuffle=False)
+        self.train_losses, self.val_losses = [], []
 
 
         # main training and validation loop
 
         for epoch in range(epochs):
             self.train()
-            train_loss = 0
-            for i, data in enumerate(tqdm.tqdm(train_loader)): # bug; will probably fill the terminal with new bars
+            train_rest_loss = 0
+            train_mix_loss = 0
+            for i, (x, y) in enumerate(tqdm.tqdm(train_loader)):
                 optimizer.zero_grad()
-                x, y = data
-                #x, y = x.to(device), y.to(device)
-                y_pred = self(x)
-                loss = criterion(y_pred, y)
-                loss.backward()
+                out = self(x)
+                rest_loss = rest_criterion(x, out["rest_pred"])
+                mix_loss = mix_criterion(out["lambda"], out["mix_pred"])
+                total_loss = rest_loss + l_scale*mix_loss
+                total_loss.backward()
                 optimizer.step()
-                train_loss += loss.item()
-            train_loss /= len(train_loader)
-            print(f"Epoch {epoch+1}/{epochs} - Train Loss: {train_loss}")
+                train_rest_loss += rest_loss.item()
+                train_mix_loss += mix_loss.item()
+            train_rest_loss /= len(train_loader)
+            train_mix_loss /= len(train_loader)
+            self.train_losses.append((train_rest_loss, train_mix_loss))
+            print(f"Epoch {epoch+1}/{epochs} - Train Rest Loss: {train_rest_loss} - Train Mix Loss: {train_mix_loss}")
 
-            if (epoch + 1) % 10 == 0:
-                self.eval()
-                val_loss = 0
-                with torch.no_grad():
-                    for i, data in enumerate(tqdm.tqdm(val_loader)):
-                        x, y = data
-                        #x, y = x.to(device), y.to(device)
-                        y_pred = self(x)
-                        loss = criterion(y_pred, y)
-                        val_loss += loss.item()
-                    val_loss /= len(val_loader)
-                    print(f"Epoch {epoch+1}/{epochs} - Val Loss: {val_loss}")
+
+            self.eval()
+            val_rest_loss = 0
+            val_mix_loss = 0
+            with torch.no_grad():
+                for i, (x, y) in enumerate(tqdm.tqdm(val_loader)):
+                    out = self(x)
+                    rest_loss = rest_criterion(x, out["rest_pred"])
+                    mix_loss = mix_criterion(out["lambda"], out["mix_pred"])
+                    val_rest_loss += rest_loss.item()
+                    val_mix_loss += mix_loss.item()
+                val_rest_loss /= len(val_loader)
+                val_mix_loss /= len(val_loader)
+                self.val_losses.append((val_rest_loss, val_mix_loss))
+                print(f"Epoch {epoch+1}/{epochs} - Val Rest Loss: {val_rest_loss} - Val Mix Loss: {val_mix_loss}")
         
 
         # calculate and print metrics
 
-        self._evaluate_metrics(self, train_loader, val_loader, metric, device)
+        if plot == True:
+            self._plot_losses()
 
 
-    def _evaluate_metrics(self, model, train_loader, val_loader, metric, device):
-        """Evaluate metrics on training and validation data."""
+
+    def _plot_losses(self):
+        epochs = range(1, len(self.train_losses) + 1)
+        train_rest_losses, train_mix_losses = zip(*self.train_losses)
+        val_rest_losses, val_mix_losses = zip(*self.val_losses)
+
+        plt.figure(figsize=(12, 6))
+        plt.subplot(1, 2, 1)
+        plt.plot(epochs, train_rest_losses, label='Train Rest Loss')
+        plt.plot(epochs, val_rest_losses, label='Val Rest Loss')
+        plt.xlabel('Epochs')
+        plt.ylabel('Loss')
+        plt.title('Restoration Loss')
+        plt.legend()
+
+        plt.subplot(1, 2, 2)
+        plt.plot(epochs, train_mix_losses, label='Train Mix Loss')
+        plt.plot(epochs, val_mix_losses, label='Val Mix Loss')
+        plt.xlabel('Epochs')
+        plt.ylabel('Loss')
+        plt.title('Mixing Loss')
+        plt.legend()
+
+        plt.tight_layout()
+        plt.show()
         
-        model.eval()
-        train_true, train_pred = [], []
-        val_true, val_pred = [], []
-
-        with torch.no_grad():
-            for data in train_loader:
-                x, y = data
-                #x, y = x.to(device), y.to(device)
-                y_pred = model(x)
-                train_true.extend(y.cpu().numpy())
-                train_pred.extend(y_pred.cpu().numpy())
-
-            for data in val_loader:
-                x, y = data
-                #x, y = x.to(device), y.to(device)
-                y_pred = model(x)
-                val_true.extend(y.cpu().numpy())
-                val_pred.extend(y_pred.cpu().numpy())
-
-        train_metric = self._calculate_metric(metric, train_true, train_pred)
-        val_metric = self._calculate_metric(metric, val_true, val_pred)
-
-        self.train_metric = train_metric
-        self.val_metric = val_metric
-
-        print(f"Final Train {metric}: {train_metric}")
-        print(f"Final Val {metric}: {val_metric}")
-
-
-    def _calculate_metric(self, metric, y_true, y_pred):
-        """Calculate metric."""
-
-        if metric == "accuracy":
-            y_pred = (y_pred > 0.5).astype(int)
-            return (y_true == y_pred).mean()
-        elif metric == "AUC":
-            return roc_auc_score(y_true, y_pred)
-        elif metric == "MSE":
-            return ((y_true - y_pred) ** 2).mean()
-        else:
-            raise ValueError("Invalid metric - [accuracy, AUC, MSE]")
-        
-    def test(self):
+    def _test(self):
         print("testing")
         pass
