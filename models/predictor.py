@@ -2,6 +2,9 @@ import torch.nn as nn
 
 class PredictionHead(nn.Module):
     """Prediction Head for Mix Encoder; a simple feed forward MLP.
+    Args: input_size (int): Input size of the model
+            linear (bool): Whether to use a linear or non-linear head
+            mode (str): Mode of the model - cls, mcls, reg
     """
     def __init__(self, 
                  input_size:int = 10, 

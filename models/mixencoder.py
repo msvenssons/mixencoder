@@ -35,7 +35,7 @@ class MixEncoder(nn.Module, Trainer):
 
         self._validate_config()
 
-        print("Setting up Mix Encoder for pre-training...\n")
+        print("\nSetting up Mix Encoder for pre-training...\n")
         print(f"Mode: {mode}\n")
     
         self.encoder_stack = nn.Sequential(

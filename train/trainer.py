@@ -21,10 +21,11 @@ class Trainer:
 
 
     def fit(self, 
-            x_train, 
-            y_train, 
-            x_val, 
-            y_val, mode: str = 'cls', 
+            x_train: torch.Tensor, 
+            y_train: torch.Tensor, 
+            x_val: torch.Tensor, 
+            y_val: torch.Tensor, 
+            mode: str = 'cls', 
             metric: str = "accuracy", 
             epochs: int = 100, 
             batch_size: int = 200, 
@@ -73,7 +74,7 @@ class Trainer:
             self.device = "cuda"
         else:
             self.device = "cpu"
-            print("cuda not available; using cpu")
+            print("cuda not available; using cpu\n")
         if mode == "cls":
             criterion = nn.BCELoss()
         elif mode == "mcls":
@@ -100,11 +101,13 @@ class Trainer:
 
         # main training and validation loop
 
-        for epoch in range(epochs):
+        t = tqdm.tqdm(range(epochs))
+
+        for epoch in t:
             self.train()
             train_rest_loss = 0
             train_mix_loss = 0
-            for i, (x, y) in enumerate(tqdm.tqdm(train_loader)):
+            for i, (x, y) in enumerate(train_loader):
                 optimizer.zero_grad()
                 out = self(x)
                 rest_loss = rest_criterion(x, out["rest_pred"])
@@ -117,14 +120,15 @@ class Trainer:
             train_rest_loss /= len(train_loader)
             train_mix_loss /= len(train_loader)
             self.train_losses.append((train_rest_loss, train_mix_loss))
-            print(f"Epoch {epoch+1}/{epochs} - Train Rest Loss: {train_rest_loss} - Train Mix Loss: {train_mix_loss}")
+            t.set_description(f"Train Epoch {epoch+1}/{epochs}")
+            t.set_postfix_str(f"Train Rest Loss: {train_rest_loss:.4f}, Train Mix Loss: {train_mix_loss:.4f}", refresh=True)
 
 
             self.eval()
             val_rest_loss = 0
             val_mix_loss = 0
             with torch.no_grad():
-                for i, (x, y) in enumerate(tqdm.tqdm(val_loader)):
+                for i, (x, y) in enumerate(val_loader):
                     out = self(x)
                     rest_loss = rest_criterion(x, out["rest_pred"])
                     mix_loss = mix_criterion(out["lambda"], out["mix_pred"])
@@ -133,7 +137,8 @@ class Trainer:
                 val_rest_loss /= len(val_loader)
                 val_mix_loss /= len(val_loader)
                 self.val_losses.append((val_rest_loss, val_mix_loss))
-                print(f"Epoch {epoch+1}/{epochs} - Val Rest Loss: {val_rest_loss} - Val Mix Loss: {val_mix_loss}")
+                t.set_description(f"Val Epoch {epoch+1}/{epochs}")
+                t.set_postfix_str(f"Val Rest Loss: {val_rest_loss:.4f},  Val Mix Loss: {val_mix_loss:.4f}", refresh=True)
         
 
         # calculate and print metrics

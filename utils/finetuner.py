@@ -8,21 +8,25 @@ from sklearn.metrics import roc_auc_score
 import matplotlib.pyplot as plt
 
 class FineTuner:
-    """Finetuner for MixEncoder."""
+    """Finetuner for MixEncoder.
+    Args: model (MixEncoder): trained model with an encoder_stack.
+    """
     def __init__(self, model):
         super(FineTuner, self).__init__()
         self.train_losses = []
         self.val_losses = []
+        self.train_metrics = []
+        self.val_metrics = []
         self.metric = None
         self.model = model
 
 
 
     def finetune(self, 
-            x_train, 
-            y_train, 
-            x_val, 
-            y_val, 
+            x_train: torch.Tensor, 
+            y_train: torch.Tensor, 
+            x_val: torch.Tensor, 
+            y_val: torch.Tensor, 
             plot: bool = False, 
             epochs: int = 100, 
             mode: str = "mse", 
@@ -74,11 +78,14 @@ class FineTuner:
         optimizer = torch.optim.Adam(self.model.encoder_stack.parameters(), lr=lr)
         pred_optimizer = torch.optim.Adam(prediction_head.parameters(), lr=lr)
 
-        for epoch in range(epochs):
+        t = tqdm.tqdm(range(epochs))
+
+        for epoch in t:
             self.model.encoder_stack.train()
             prediction_head.train()
             train_loss = 0
-            for i, (x, y) in enumerate(tqdm.tqdm(train_loader)):
+            train_metric = 0
+            for i, (x, y) in enumerate(train_loader):
                 optimizer.zero_grad()
                 z = self.model.encoder_stack(x)
                 pred = prediction_head(z)
@@ -87,24 +94,31 @@ class FineTuner:
                 optimizer.step()
                 pred_optimizer.step()
                 train_loss += loss.item()
+                train_metric += self._calculate_metric(metric, y, pred)
             train_loss /= len(train_loader)
+            train_metric /= len(train_loader)
             self.train_losses.append((train_loss))
-            print(f"Epoch {epoch+1}/{epochs} - Finetuned Train Loss: {train_loss}")
-            print(f"Epoch {epoch+1}/{epochs} - Finetuned Train {metric}: {self._calculate_metric(metric, y_train, pred)}")
-
+            self.train_metrics.append((train_metric))
+            t.set_description(f"Finetune Train Epoch {epoch+1}/{epochs}")
+            t.set_postfix_str(f"Finetuned Train {metric}: {train_metric}, Finetuned Train Loss: {train_loss}")
 
             self.model.encoder_stack.eval()
             prediction_head.eval()
             val_loss = 0
+            val_metric = 0
             with torch.no_grad():
-                for i, (x, y) in enumerate(tqdm.tqdm(val_loader)):
+                for i, (x, y) in enumerate(val_loader):
                     z = self.model.encoder_stack(x)
                     pred = prediction_head(z)
                     loss = criterion(pred, y)
                     val_loss += loss.item()
+                    val_metric += self._calculate_metric(metric, y, pred)
                 val_loss /= len(val_loader)
+                val_metric /= len(val_loader)
                 self.val_losses.append((val_loss))
-                print(f"Epoch {epoch+1}/{epochs} - Finetuned Val {metric}: {self._calculate_metric(metric, y_val, pred)}")
+                self.val_metrics.append((val_metric))
+                t.set_description(f"Finetune Val Epoch {epoch+1}/{epochs}")
+                t.set_postfix_str(f"Finetuned Val {metric}: {val_metric:.4f}, Finetuned Val Loss: {val_loss:.4f}")
         
         if plot:
             self._plot_losses()
@@ -113,6 +127,8 @@ class FineTuner:
 
     def _calculate_metric(self, metric, y_true, y_pred):
         """Calculate metric."""
+        y_true = y_true.cpu().detach().numpy()
+        y_pred = y_pred.cpu().detach().numpy()
 
         if metric == "accuracy":
             y_pred = (y_pred > 0.5).astype(int)
@@ -128,10 +144,26 @@ class FineTuner:
     
     def _plot_losses(self):
         """Plot losses."""
+        plt.figure(figsize=(12, 6))
+        plt.subplot(1, 2, 1)
         plt.plot(self.train_losses, label="Train Loss")
         plt.plot(self.val_losses, label="Val Loss")
         plt.xlabel("Epochs")
         plt.ylabel("Loss")
         plt.legend()
+        plt.grid()
         plt.title("Finetuning Losses")
+
+        plt.subplot(1, 2, 2)
+        plt.plot(self.train_metrics, label=f"Train {self.metric}")
+        plt.plot(self.val_metrics, label=f"Val {self.metric}")
+        plt.xlabel("Epochs")
+        plt.ylabel(self.metric)
+        plt.legend()
+        plt.grid()
+        plt.title(f"Finetuning Results - {self.metric}")
+        
+        plt.tight_layout()
         plt.show()
+
+        print(f"Highest Validation {self.metric}: {max(self.val_metrics)}\nFinal Validation {self.metric}: {self.val_metrics[-1]}")
