@@ -17,6 +17,7 @@ class FineTuner:
         self.train_metrics = []
         self.val_metrics = []
         self.metric = None
+        self.loss_metric = None
         self.model = model
 
 
@@ -62,8 +63,15 @@ class FineTuner:
 
         if mode == "reg":
             criterion = nn.MSELoss()
+            self.loss_metric = "MSE"
+        elif mode == "cls":
+            criterion = nn.BCELoss() 
+            self.loss_metric = "BCE" 
         else:
-            criterion = nn.BCELoss() if mode == 'cls' else nn.CrossEntropyLoss()
+            criterion = nn.CrossEntropyLoss()
+            self.loss_metric = "MCE"
+
+        self.metric = metric
 
         # define data loaders
         train_loader = DataLoader(TensorDataset(x_train, y_train), batch_size=batch_size, shuffle=True)
@@ -151,7 +159,7 @@ class FineTuner:
         plt.ylabel("Loss")
         plt.legend()
         plt.grid()
-        plt.title("Finetuning Losses")
+        plt.title(f"Finetuning Losses ({self.loss_metric})")
 
         plt.subplot(1, 2, 2)
         plt.plot(self.train_metrics, label=f"Train {self.metric}")

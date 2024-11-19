@@ -12,9 +12,6 @@ class Trainer:
     def __init__(self):
         super(Trainer, self).__init__()
 
-
-        self.train_metric = None
-        self.val_metric = None
         self.device = "cpu"
         self.train_losses = []
         self.val_losses = []
@@ -49,6 +46,8 @@ class Trainer:
             epochs (int): Number of epochs
             batch_size (int): Batch size
             lr (float): Learning rate
+            l_scale (float): Scaling factor for mixing loss
+            plot (bool): Plot losses
             device (str): Device to train on - cpu, cuda
         """
 
@@ -109,7 +108,7 @@ class Trainer:
             for i, (x, y) in enumerate(train_loader):
                 optimizer.zero_grad()
                 out = self(x)
-                rest_loss = rest_criterion(x, out["rest_pred"])
+                rest_loss = rest_criterion(out["output"], out["rest_pred"])
                 mix_loss = mix_criterion(out["lambda"], out["mix_pred"])
                 total_loss = rest_loss + l_scale*mix_loss
                 total_loss.backward()
@@ -129,7 +128,7 @@ class Trainer:
             with torch.no_grad():
                 for i, (x, y) in enumerate(val_loader):
                     out = self(x)
-                    rest_loss = rest_criterion(x, out["rest_pred"])
+                    rest_loss = rest_criterion(out["output"], out["rest_pred"])
                     mix_loss = mix_criterion(out["lambda"], out["mix_pred"])
                     val_rest_loss += rest_loss.item()
                     val_mix_loss += mix_loss.item()

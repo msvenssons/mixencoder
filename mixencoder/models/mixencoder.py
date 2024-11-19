@@ -19,6 +19,22 @@ class MixEncoder(nn.Module, Trainer):
                  u_thresh: float = 0.9, 
                  l_thresh: float = 0.5):
         
+        """
+        MixEncoder model for pre-training.
+        Args:
+            input_size (int): Number of features
+            hidden_size (int): Hidden layer size
+            emb_size (int): Embedding size
+            enc_layers (int): Number of layers in the encoder stack
+            mix_layers (int): Number of layers in the mixing stack
+            restore_layers (int): Number of layers in the restoration stack
+            mode (str): Mode of the model - zmix, xmix (xmix for input mixing, zmix for latent mixing and rep. restoration)
+            alpha (float): Alpha parameter for mixing
+            beta (float): Beta parameter for mixing
+            u_thresh (float): Upper threshold for mixing
+            l_thresh (float): Lower threshold for mixing
+        """
+        
         super(MixEncoder, self).__init__()
 
         self.input_size = input_size
@@ -58,7 +74,7 @@ class MixEncoder(nn.Module, Trainer):
             nn.Linear(emb_size, hidden_size),
             nn.GELU(),
             *[layer for _ in range(restore_layers-2) for layer in (nn.Linear(hidden_size, hidden_size), nn.GELU())],
-            nn.Linear(hidden_size, input_size)
+            nn.Linear(hidden_size, input_size if mode == "xmix" else emb_size)
         )
 
     def forward(self, x):
@@ -67,17 +83,20 @@ class MixEncoder(nn.Module, Trainer):
             z = self.encoder_stack(mix)
             mix_pred = self.mix_stack(z)
             rest_pred = self.restore_stack(z)
+            output = x
         elif self.mode == "zmix":
             z = self.encoder_stack(x)
             mix, lamb = mixer(z, self.alpha, self.beta, self.u_thresh, self.l_thresh)
             mix_pred = self.mix_stack(mix)
             rest_pred = self.restore_stack(mix)
+            output = z
         out = {
             "rest_pred" : rest_pred,
             "mix_pred" : mix_pred,
             "lambda" : lamb,
             "z" : z,
-            "mix" : mix
+            "mix" : mix,
+            "output" : output
         }
         return out
     
