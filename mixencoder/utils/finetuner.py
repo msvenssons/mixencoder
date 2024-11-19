@@ -1,8 +1,7 @@
 import torch.nn as nn
 import torch
-import torch.optim as optim
+import mixencoder.models
 from torch.utils.data import DataLoader, TensorDataset
-from models.predictor import PredictionHead 
 import tqdm
 from sklearn.metrics import roc_auc_score
 import matplotlib.pyplot as plt
@@ -71,7 +70,7 @@ class FineTuner:
         val_loader = DataLoader(TensorDataset(x_val, y_val), batch_size=batch_size, shuffle=False)
 
         # define prediction head
-        prediction_head = PredictionHead(input_size=self.model.emb_size, mode=mode)
+        prediction_head = mixencoder.models.PredictionHead(input_size=self.model.emb_size, mode=mode)
         prediction_head.to(self.model.device)
 
         # define optimizers

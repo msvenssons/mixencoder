@@ -35,7 +35,6 @@ class Trainer:
             device: str = "cpu"):
         
         # TODO: add testing functionality
-        #       I don't need metrics here, this is just to pretrain the encoder
         
         """Training loop for mixencoder.
         Args:

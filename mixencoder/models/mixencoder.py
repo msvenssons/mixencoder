@@ -1,7 +1,7 @@
 import torch.nn as nn
 import torch
-from utils.utils import mixer
-from train.trainer import Trainer
+from mixencoder.utils import mixer
+from mixencoder.train import Trainer
 
 
 
