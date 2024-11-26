@@ -1,14 +1,14 @@
-# add a basemodel with a train class + method and then have mixencoder inherit from it
+# Training logic for training mixencoder.
 import torch.nn as nn
 import torch
 import torch.optim as optim
-from torch.utils.data import DataLoader, TensorDataset 
+from torch.utils.data import DataLoader, TensorDataset
 import tqdm
-from sklearn.metrics import roc_auc_score
 import matplotlib.pyplot as plt
 
 
 class Trainer:
+    """Trainer class for training mixencoder."""
     def __init__(self):
         super(Trainer, self).__init__()
 
@@ -18,17 +18,17 @@ class Trainer:
 
 
     def fit(self, 
-            x_train: torch.Tensor, 
-            y_train: torch.Tensor, 
-            x_val: torch.Tensor, 
-            y_val: torch.Tensor, 
-            mode: str = 'cls', 
-            metric: str = "accuracy", 
-            epochs: int = 100, 
-            batch_size: int = 200, 
+            x_train: torch.Tensor,
+            y_train: torch.Tensor,
+            x_val: torch.Tensor,
+            y_val: torch.Tensor,
+            mode: str = 'cls',
+            metric: str = "accuracy",
+            epochs: int = 100,
+            batch_size: int = 200,
             lr: float = 1e-3,
             l_scale: float = 0.3,
-            plot: bool = True, 
+            plot: bool = True,
             device: str = "cpu"):
         
         # TODO: add testing functionality
@@ -73,12 +73,6 @@ class Trainer:
         else:
             self.device = "cpu"
             print("cuda not available; using cpu\n")
-        if mode == "cls":
-            criterion = nn.BCELoss()
-        elif mode == "mcls":
-            criterion = nn.CrossEntropyLoss()
-        else:
-            criterion = nn.MSELoss()
 
 
         # set training parameters
@@ -89,8 +83,7 @@ class Trainer:
         x_val, y_val = x_val.to(self.device), y_val.to(self.device)
         train_data = TensorDataset(x_train, y_train)
         val_data = TensorDataset(x_val, y_val)
-        rest_criterion = nn.MSELoss()
-        mix_criterion = nn.MSELoss()
+        criterion = nn.MSELoss()
         optimizer = optim.Adam(self.parameters(), lr=lr)
         train_loader = DataLoader(train_data, batch_size=batch_size, shuffle=True)
         val_loader = DataLoader(val_data, batch_size=batch_size, shuffle=False)
@@ -108,8 +101,8 @@ class Trainer:
             for i, (x, y) in enumerate(train_loader):
                 optimizer.zero_grad()
                 out = self(x)
-                rest_loss = rest_criterion(out["output"], out["rest_pred"])
-                mix_loss = mix_criterion(out["lambda"], out["mix_pred"])
+                rest_loss = criterion(out["z"], out["rest_pred"])
+                mix_loss = criterion(out["lambda"], out["mix_pred"])
                 total_loss = rest_loss + l_scale*mix_loss
                 total_loss.backward()
                 optimizer.step()
@@ -128,8 +121,8 @@ class Trainer:
             with torch.no_grad():
                 for i, (x, y) in enumerate(val_loader):
                     out = self(x)
-                    rest_loss = rest_criterion(out["output"], out["rest_pred"])
-                    mix_loss = mix_criterion(out["lambda"], out["mix_pred"])
+                    rest_loss = criterion(out["z"], out["rest_pred"])
+                    mix_loss = criterion(out["lambda"], out["mix_pred"])
                     val_rest_loss += rest_loss.item()
                     val_mix_loss += mix_loss.item()
                 val_rest_loss /= len(val_loader)
@@ -137,11 +130,11 @@ class Trainer:
                 self.val_losses.append((val_rest_loss, val_mix_loss))
                 t.set_description(f"Val Epoch {epoch+1}/{epochs}")
                 t.set_postfix_str(f"Val Rest Loss: {val_rest_loss:.4f},  Val Mix Loss: {val_mix_loss:.4f}", refresh=True)
-        
+      
 
         # calculate and print metrics
 
-        if plot == True:
+        if plot:
             self._plot_losses()
 
 
@@ -158,6 +151,7 @@ class Trainer:
         plt.xlabel('Epochs')
         plt.ylabel('Loss')
         plt.title('Restoration Loss')
+        plt.grid()
         plt.legend()
 
         plt.subplot(1, 2, 2)
@@ -166,11 +160,13 @@ class Trainer:
         plt.xlabel('Epochs')
         plt.ylabel('Loss')
         plt.title('Mixing Loss')
+        plt.grid()
         plt.legend()
 
         plt.tight_layout()
         plt.show()
-        
+       
+       
     def _test(self):
         print("testing")
-        pass
+

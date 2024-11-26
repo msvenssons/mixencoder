@@ -7,16 +7,16 @@ from mixencoder.train import Trainer
 
 
 class MixEncoder(nn.Module, Trainer):
-    def __init__(self, input_size: int = 27, 
-                 hidden_size: int = 10, 
-                 emb_size: int = 10, 
-                 enc_layers: int = 4, 
-                 mix_layers: int = 2, 
-                 restore_layers: int = 2, 
-                 mode: str = "xmix", 
-                 alpha: float = 5, 
+    def __init__(self, input_size: int = 27,
+                 hidden_size: int = 10,
+                 emb_size: int = 10,
+                 enc_layers: int = 4,
+                 mix_layers: int = 2,
+                 restore_layers: int = 2,
+                 mode: str = "xmix",
+                 alpha: float = 5,
                  beta: float = 2,
-                 u_thresh: float = 0.9, 
+                 u_thresh: float = 0.9,
                  l_thresh: float = 0.5):
         
         """
@@ -81,22 +81,16 @@ class MixEncoder(nn.Module, Trainer):
         if self.mode == "xmix":
             mix, lamb = mixer(x, self.alpha, self.beta, self.u_thresh, self.l_thresh)
             z = self.encoder_stack(mix)
-            mix_pred = self.mix_stack(z)
-            rest_pred = self.restore_stack(z)
-            output = x
-        elif self.mode == "zmix":
+        else:
             z = self.encoder_stack(x)
-            mix, lamb = mixer(z, self.alpha, self.beta, self.u_thresh, self.l_thresh)
-            mix_pred = self.mix_stack(mix)
-            rest_pred = self.restore_stack(mix)
-            output = z
+            z, lamb = mixer(z, self.alpha, self.beta, self.u_thresh, self.l_thresh)
+        mix_pred = self.mix_stack(z)
+        rest_pred = self.restore_stack(z)
         out = {
             "rest_pred" : rest_pred,
             "mix_pred" : mix_pred,
             "lambda" : lamb,
-            "z" : z,
-            "mix" : mix,
-            "output" : output
+            "z" : z
         }
         return out
     
