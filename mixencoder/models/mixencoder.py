@@ -2,11 +2,11 @@ import torch.nn as nn
 import torch
 from mixencoder.utils import mixer
 from mixencoder.train import Trainer
+from mixencoder.setups import MixSetup
 
 
 
-
-class MixEncoder(nn.Module, Trainer):
+class MixEncoder(nn.Module, MixSetup, Trainer):
     def __init__(self, input_size: int = 27,
                  hidden_size: int = 10,
                  emb_size: int = 10,
@@ -86,6 +86,9 @@ class MixEncoder(nn.Module, Trainer):
             z, lamb = mixer(z, self.alpha, self.beta, self.u_thresh, self.l_thresh)
         mix_pred = self.mix_stack(z)
         rest_pred = self.restore_stack(z)
+
+        z = x if self.mode == "xmix" else z
+
         out = {
             "rest_pred" : rest_pred,
             "mix_pred" : mix_pred,
